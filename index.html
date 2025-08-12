@@ -131,6 +131,39 @@ font-size: 0.9rem;
 <p><strong>10-Year Treasury Yield:</strong> <span id="treasuryYield" class="rate">Loading...</span></p>
 </section>
 
+  <!-- Add this inside your body where you want the 10-Year Treasury Yield displayed -->
+<h2>10-Year Treasury Yield</h2>
+<div class="range-bar" id="rangeBar" style="position: relative; height: 20px; background: linear-gradient(to right, #4CAF50 0%, #FFEB3B 50%, #F44336 100%); border-radius: 10px; margin: 20px 0;">
+  <!-- Markers for Good and Bad limits -->
+  <div class="marker" style="position: absolute; top: -10px; width: 2px; height: 40px; background: #333; left: 30%;"></div>
+  <div class="label" style="position: absolute; top: 30px; width: 40px; margin-left: -20px; font-size: 0.8em; color: #333; text-align: center; left: 30%;">3.0%</div>
+
+  <div class="marker" style="position: absolute; top: -10px; width: 2px; height: 40px; background: #333; left: 80%;"></div>
+  <div class="label" style="position: absolute; top: 30px; width: 40px; margin-left: -20px; font-size: 0.8em; color: #333; text-align: center; left: 80%;">4.0%</div>
+
+  <!-- Pointer for current rate -->
+  <div id="ratePointer" style="position: absolute; top: -15px; width: 0; height: 0; border-left: 10px solid transparent; border-right: 10px solid transparent; border-bottom: 15px solid #000; left: 0;"></div>
+</div>
+  <p>Current Yield: <span id="currentYield" style="font-weight:bold;"></span></p>
+
+<script>
+
+   // Limits for "good" and "bad"
+  const goodLimit = 3.0;
+  const badLimit = 4.0;
+  const minRate = 2.0;  // left end of bar scale
+  const maxRate = 5.0;  // right end of bar scale
+
+  // Convert a yield rate to a % position on the bar (0% = minRate, 100% = maxRate)
+  function rateToPercent(rate) {
+    let pct = ((rate - minRate) / (maxRate - minRate)) * 100;
+    if (pct < 0) pct = 0;
+    if (pct > 100) pct = 100;
+    return pct;
+  }
+
+
+
 <section>
 <h2>Rate Trends</h2>
 <div id="chartToggle">
@@ -198,34 +231,32 @@ colorRate("helocRate", staticHelocRate, { green: 7.0, red: 8.51 });
 document.getElementById("loanRate").textContent = staticLoanRate.toFixed(2) + "%";
 colorRate("loanRate", staticLoanRate, { green: 7.5, red: 9.01 });
 
-// ---- Fetch 10-Year Treasury Yield from U.S. Treasury with CORS proxy and filter ----
-fetch('https://api.allorigins.win/get?url=' + encodeURIComponent('https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/avg_interest_rates?sort=-record_date&page[size]=5'))
-  .then(res => res.json())
-  .then(data => {
-    const jsonData = JSON.parse(data.contents);
-    console.log('Treasury full data:', jsonData.data);
-    if (jsonData.data && jsonData.data.length > 0) {
-      const tenYear = jsonData.data.find(item => {
-        console.log('Checking security_desc:', item.security_desc);
-        return item.security_desc === "Treasury Notes";
-      });
-      if (tenYear) {
-        console.log('Found 10-Year Treasury:', tenYear);
-        document.getElementById("treasuryYield").textContent = tenYear.avg_interest_rate_amt + "%";
-        colorRate("treasuryYield", tenYear.avg_interest_rate_amt, { green: 3.0, red: 4.01 });
+  // Fetch the 10-Year Treasury Yield and update the pointer and text
+  fetch('https://api.allorigins.win/get?url=' + encodeURIComponent('https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/avg_interest_rates?sort=-record_date&page[size]=5'))
+    .then(res => res.json())
+    .then(data => {
+      const jsonData = JSON.parse(data.contents);
+      if (jsonData.data && jsonData.data.length > 0) {
+        const tenYear = jsonData.data.find(item => item.security_desc === "Treasury Notes");
+        if (tenYear) {
+          const yieldValue = parseFloat(tenYear.avg_interest_rate_amt);
+          const pointer = document.getElementById("ratePointer");
+          const currentYield = document.getElementById("currentYield");
+
+          const percent = rateToPercent(yieldValue);
+          pointer.style.left = percent + "%";
+          currentYield.textContent = yieldValue.toFixed(3) + "%";
+        } else {
+          document.getElementById("currentYield").textContent = "N/A";
+        }
       } else {
-        console.warn("10-Year Treasury Note not found");
-        document.getElementById("treasuryYield").textContent = "N/A";
+        document.getElementById("currentYield").textContent = "N/A";
       }
-    } else {
-      console.warn("No data in Treasury response");
-      document.getElementById("treasuryYield").textContent = "N/A";
-    }
-  })
-  .catch(err => {
-    console.error("Treasury fetch error:", err);
-    document.getElementById("treasuryYield").textContent = "Error loading";
-  });
+    })
+    .catch(() => {
+      document.getElementById("currentYield").textContent = "Error loading";
+    });
+</script>
 
 // Chart.js setup for Rate Trends
 
