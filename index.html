@@ -200,26 +200,25 @@ colorRate("loanRate", staticLoanRate, { green: 7.5, red: 9.01 });
 
 // ---- Fetch 10-Year Treasury Yield from U.S. Treasury with CORS proxy and filter ----
 fetch('https://api.allorigins.win/get?url=' + encodeURIComponent('https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/avg_interest_rates?sort=-record_date&page[size]=5'))
-.then(res => res.json())
-.then(data => {
-const jsonData = JSON.parse(data.contents);
-// console.log('Treasury data:', jsonData); // Uncomment to debug
-if (jsonData.data && jsonData.data.length > 0) {
-// Find first item with security_type_desc containing '10-Year'
-const tenYear = jsonData.data.find(item => item.security_type_desc && item.security_type_desc.includes("10-Year"));
-if (tenYear) {
-document.getElementById("treasuryYield").textContent = tenYear.avg_interest_rate_amt + "%";
-colorRate("treasuryYield", tenYear.avg_interest_rate_amt, { green: 3.0, red: 4.01 });
-} else {
-document.getElementById("treasuryYield").textContent = "N/A";
-}
-} else {
-document.getElementById("treasuryYield").textContent = "N/A";
-}
-})
-.catch(() => {
-document.getElementById("treasuryYield").textContent = "Error loading";
-});
+  .then(res => res.json())
+  .then(data => {
+    const jsonData = JSON.parse(data.contents);
+    if (jsonData.data && jsonData.data.length > 0) {
+      // Find item where security_desc === 'Treasury Notes' (10-Year)
+      const tenYear = jsonData.data.find(item => item.security_desc === "Treasury Notes");
+      if (tenYear) {
+        document.getElementById("treasuryYield").textContent = tenYear.avg_interest_rate_amt + "%";
+        colorRate("treasuryYield", tenYear.avg_interest_rate_amt, { green: 3.0, red: 4.01 });
+      } else {
+        document.getElementById("treasuryYield").textContent = "N/A";
+      }
+    } else {
+      document.getElementById("treasuryYield").textContent = "N/A";
+    }
+  })
+  .catch(() => {
+    document.getElementById("treasuryYield").textContent = "Error loading";
+  });
 
 // Chart.js setup for Rate Trends
 
