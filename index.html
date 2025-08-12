@@ -71,41 +71,55 @@
     border-bottom: 1px solid #eee;
     font-size: 1.1rem;
   }
-  /* Limit bar container */
-  .limit-bar {
+  /* Treasury slider container */
+  .treasury-slider-container {
+    margin-top: 10px;
+    max-width: 420px;
+    margin-left: auto;
+    margin-right: auto;
+    user-select: none;
+  }
+  .treasury-slider-bar {
     position: relative;
     height: 16px;
     background: #ddd;
-    border-radius: 8px;
-    margin-top: 6px;
-    max-width: 400px;
-    margin-left: auto;
-    margin-right: auto;
+    border-radius: 10px;
   }
-  .limit-bar .good {
+  .treasury-slider-good {
     position: absolute;
     left: 0;
+    top: 0;
     height: 100%;
     background: #a5d6a7;
-    border-radius: 8px 0 0 8px;
+    border-radius: 10px 0 0 10px;
   }
-  .limit-bar .bad {
+  .treasury-slider-bad {
     position: absolute;
     right: 0;
+    top: 0;
     height: 100%;
-    width: 20%;
     background: #ef9a9a;
-    border-radius: 0 8px 8px 0;
+    border-radius: 0 10px 10px 0;
   }
-  .limit-bar .rate-indicator {
+  .treasury-slider-indicator {
     position: absolute;
-    top: -6px;
-    width: 2px;
-    height: 28px;
+    top: -8px;
+    width: 3px;
+    height: 32px;
     background: #2e7d32;
+    border-radius: 1.5px;
+    transition: left 0.3s ease, background-color 0.3s ease;
   }
-  .limit-bar .rate-indicator.red {
+  .treasury-slider-indicator.red {
     background: #c62828;
+  }
+  /* Label text below the bar */
+  .treasury-slider-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.9rem;
+    margin-top: 6px;
+    color: #555;
   }
 </style>
 </head>
@@ -131,10 +145,16 @@
     <span id="treasuryRate" class="rate-display black">Loading...</span>
   </div>
 
-  <div id="treasuryLimitBar" class="limit-bar" style="display:none;">
-    <div class="good" style="width:60%;"></div>
-    <div class="bad"></div>
-    <div id="treasuryIndicator" class="rate-indicator"></div>
+  <div class="treasury-slider-container" id="treasurySlider" style="display:none;">
+    <div class="treasury-slider-bar">
+      <div class="treasury-slider-good"></div>
+      <div class="treasury-slider-bad"></div>
+      <div id="treasuryIndicator" class="treasury-slider-indicator"></div>
+    </div>
+    <div class="treasury-slider-labels">
+      <span>Good ≤ 3.5%</span>
+      <span>Bad ≥ 4.5%</span>
+    </div>
   </div>
 </div>
 
@@ -151,7 +171,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-  // Utility: color-code rates based on thresholds
+  // Color code utility
   function colorClassForRate(rate, goodMax, badMin) {
     if (rate === null || isNaN(rate)) return 'black';
     if (rate <= goodMax) return 'green';
@@ -159,7 +179,6 @@
     return 'black';
   }
 
-  // Function to update a rate display with color
   function updateRateDisplay(id, rate, goodMax, badMin) {
     const el = document.getElementById(id);
     if (rate === null || isNaN(rate)) {
@@ -171,7 +190,6 @@
     el.className = 'rate-display ' + colorClassForRate(rate, goodMax, badMin);
   }
 
-  // Fetch Treasury data
   async function fetchTreasury() {
     try {
       const resp = await fetch('https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/avg_interest_rates?page[size]=1&page[number]=1&sort=-record_date');
@@ -179,62 +197,56 @@
       const json = await resp.json();
       if (!json.data || !json.data.length) return null;
 
-      // Find 10-year treasury rate from data
       const tenYearRecord = json.data.find(rec => rec.security_desc === "Treasury Notes" && rec.record_calendar_year && rec.avg_interest_rate_amt);
       if (!tenYearRecord) return null;
 
-      const rate = parseFloat(tenYearRecord.avg_interest_rate_amt);
-      return rate;
+      return parseFloat(tenYearRecord.avg_interest_rate_amt);
     } catch (e) {
       console.error('Fetch Treasury error:', e);
       return null;
     }
   }
 
-  // Update Treasury Limit Bar
-  function updateTreasuryLimitBar(rate) {
-    const container = document.getElementById('treasuryLimitBar');
+  function updateTreasurySlider(rate) {
+    const slider = document.getElementById('treasurySlider');
     const indicator = document.getElementById('treasuryIndicator');
     const goodMax = 3.5;
     const badMin = 4.5;
 
     if (rate === null || isNaN(rate)) {
-      container.style.display = 'none';
+      slider.style.display = 'none';
       return;
     }
-    container.style.display = 'block';
 
-    // Bar width is 100%, "good" zone 0-3.5 (70%), "bad" zone 4.5-5+ (20%) - simplified here
-    const totalRange = 6; // assume 0-6%
-    const goodPercent = (goodMax / totalRange) * 100; // ~58%
-    const badPercent = ((totalRange - badMin) / totalRange) * 100; // ~25%
+    slider.style.display = 'block';
 
-    container.querySelector('.good').style.width = goodPercent + '%';
-    container.querySelector('.bad').style.width = badPercent + '%';
+    // The bar is 100% wide. Good zone is 0 to goodMax (say 3.5), bad zone is badMin to 6%
+    const totalRange = 6;
+    const goodPercent = (goodMax / totalRange) * 100;
+    const badPercent = ((totalRange - badMin) / totalRange) * 100;
 
-    // Position indicator (clamp to 0-100%)
+    slider.querySelector('.treasury-slider-good').style.width = goodPercent + '%';
+    slider.querySelector('.treasury-slider-bad').style.width = badPercent + '%';
+
     let posPercent = (rate / totalRange) * 100;
     if (posPercent < 0) posPercent = 0;
     if (posPercent > 100) posPercent = 100;
+
     indicator.style.left = posPercent + '%';
 
-    // Color indicator
-    if (rate <= goodMax) indicator.className = 'rate-indicator green';
-    else if (rate >= badMin) indicator.className = 'rate-indicator red';
-    else indicator.className = 'rate-indicator black';
+    // Color the indicator
+    if (rate <= goodMax) indicator.className = 'treasury-slider-indicator green';
+    else if (rate >= badMin) indicator.className = 'treasury-slider-indicator red';
+    else indicator.className = 'treasury-slider-indicator black';
   }
 
-  // Simulated fetch for HELOC and Home Equity Loan - replace these with real APIs when available
   async function fetchHeloc() {
-    // Simulate random value between 5.5 and 7.5
     return 5.5 + Math.random() * 2;
   }
   async function fetchHelLoan() {
-    // Simulate random value between 6.0 and 8.0
     return 6.0 + Math.random() * 2;
   }
 
-  // Update all rates daily
   async function updateRates() {
     const heloc = await fetchHeloc();
     updateRateDisplay('helocRate', heloc, 6.0, 7.0);
@@ -244,14 +256,13 @@
 
     const treasury = await fetchTreasury();
     updateRateDisplay('treasuryRate', treasury, 3.5, 4.5);
-    updateTreasuryLimitBar(treasury);
+    updateTreasurySlider(treasury);
   }
 
-  // === CME Chart Section ===
+  // === CME Chart ===
   const ctx = document.getElementById('rateChart').getContext('2d');
   let currentChart;
 
-  // Format date labels for chart x-axis
   function formatDateLabel(dateStr, daysCount) {
     const d = new Date(dateStr);
     if (daysCount <= 31) {
@@ -261,24 +272,18 @@
     }
   }
 
-  // Fetch CME Group futures data via proxy
   async function fetchCMEData(days) {
-    // CME Group Futures contract 438 (example)
     const baseUrl = `https://www.cmegroup.com/CmeWS/mvc/Quotes/Futures/438/G?pageSize=${days}&pageNumber=1&sortField=tradeDate&sortOrder=DESC`;
-
-    // Use free CORS proxy (for demo only)
     const proxyUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent(baseUrl);
 
     try {
       const response = await fetch(proxyUrl);
       if (!response.ok) throw new Error('Network response not ok');
       const textData = await response.json();
-      // Proxy returns { contents: "<raw JSON>" }
       const cmeData = JSON.parse(textData.contents);
 
       if (!cmeData.quotes) throw new Error('No quotes data');
 
-      // Sort oldest to newest
       const sortedQuotes = cmeData.quotes.sort((a,b) => new Date(a.tradeDate) - new Date(b.tradeDate));
 
       const labels = sortedQuotes.map(q => formatDateLabel(q.tradeDate, days));
@@ -291,7 +296,6 @@
     }
   }
 
-  // Create or update Chart.js line chart
   function createChart(labels, data, daysCount) {
     if (currentChart) currentChart.destroy();
 
@@ -327,7 +331,6 @@
     });
   }
 
-  // Load and display chart data for given days count
   async function loadChart(daysCount) {
     document.getElementById('btn30').classList.toggle('active', daysCount === 30);
     document.getElementById('btn12').classList.toggle('active', daysCount === 365);
@@ -344,15 +347,11 @@
     }
   }
 
-  // Setup toggle buttons
   document.getElementById('btn30').onclick = () => loadChart(30);
   document.getElementById('btn12').onclick = () => loadChart(365);
 
-  // Initial load
   updateRates();
   loadChart(30);
-
-  // Optionally refresh daily rates every hour
   setInterval(updateRates, 1000 * 60 * 60);
 </script>
 
