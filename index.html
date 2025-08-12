@@ -208,19 +208,23 @@ fetch("https://www.bankrate.com/api/loan-rates/home-equity/v1/")
     document.getElementById("loanRate").textContent = "Error loading";
   });
 
-// Fetch 10-Year Treasury Yield from U.S. Treasury
-fetch("https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/avg_interest_rates")
+// Fetch 10-Year Treasury Yield from U.S. Treasury with CORS proxy and filter
+fetch('https://api.allorigins.win/get?url=' + encodeURIComponent('https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/avg_interest_rates?filter=security_type_desc:eq:Note&sort=-record_date&page[size]=1'))
   .then(res => res.json())
   .then(data => {
-    const latest = data.data.find(item => item.security_desc === "Marketable" && item.security_type_desc.includes("10-Year"));
-    const treasuryRate = latest ? `${latest.avg_interest_rate_amt}` : "N/A";
-    document.getElementById("treasuryYield").textContent = treasuryRate + "%";
-    colorRate("treasuryYield", treasuryRate, { green: 3.0, red: 4.01 });
+    const jsonData = JSON.parse(data.contents);
+    if (jsonData.data && jsonData.data.length > 0) {
+      const latest = jsonData.data[0];
+      document.getElementById("treasuryYield").textContent = latest.avg_interest_rate_amt + "%";
+      colorRate("treasuryYield", latest.avg_interest_rate_amt, { green: 3.0, red: 4.01 });
+    } else {
+      document.getElementById("treasuryYield").textContent = "N/A";
+    }
   })
   .catch(() => {
     document.getElementById("treasuryYield").textContent = "Error loading";
   });
-
+  
 // Chart.js setup for Rate Trends
 
 // For demo, mock historical data — replace with real API if available
