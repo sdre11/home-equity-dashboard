@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Home Equity & HELOC Rate Dashboard</title>
+<style>
+  body {
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    margin: 20px;
+    background-color: #f9fbfd;
+    color: #222;
+  }
+  h1, h2 {
+    color: #004466;
+    text-align: center;
+  }
+  section {
+    margin-bottom: 30px;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0, 70, 102, 0.1);
+    padding: 20px;
+    max-width: 900px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  iframe {
+    border: none;
+    width: 100%;
+    height: 400px;
+    border-radius: 8px;
+  }
+  ul {
+    list-style: none;
+    padding-left: 0;
+    max-width: 900px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  ul li {
+    margin: 8px 0;
+  }
+  ul li a {
+    color: #007acc;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 1.05rem;
+  }
+  ul li a:hover {
+    text-decoration: underline;
+  }
+  p {
+    font-size: 1.1rem;
+  }
+  .rate {
+    font-weight: 700;
+    font-size: 1.3rem;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 12px;
+  }
+  table, th, td {
+    border: 1px solid #ccc;
+  }
+  th, td {
+    padding: 10px;
+    text-align: center;
+    font-size: 1rem;
+  }
+  /* Buttons for chart toggle */
+  #chartToggle {
+    text-align: center;
+    margin-bottom: 15px;
+  }
+  #chartToggle button {
+    background-color: #007acc;
+    border: none;
+    color: white;
+    font-weight: 600;
+    font-size: 1rem;
+    padding: 10px 20px;
+    margin: 0 10px;
+    border-radius: 25px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+  }
+  #chartToggle button:hover {
+    background-color: #005f99;
+  }
+  #chartToggle button.active {
+    background-color: #004466;
+  }
+  canvas {
+    max-width: 900px;
+    margin: 0 auto;
+    display: block;
+  }
+  @media (max-width: 600px) {
+    section, ul, canvas {
+      margin: 10px;
+      max-width: 95%;
+    }
+    #chartToggle button {
+      padding: 8px 15px;
+      margin: 5px 5px;
+      font-size: 0.9rem;
+    }
+  }
+</style>
+</head>
+<body>
+
+<h1>🏠 Home Equity & HELOC Rate Dashboard</h1>
+
+<section>
+  <h2>Quick Links to Rate Aggregators</h2>
+  <ul>
+    <li><a href="https://www.bankrate.com/home-equity/" target="_blank" rel="noopener noreferrer">Bankrate – Home Equity Loans</a></li>
+    <li><a href="https://www.nerdwallet.com/best/home-equity-loans" target="_blank" rel="noopener noreferrer">NerdWallet – Home Equity Loans</a></li>
+    <li><a href="https://www.lendingtree.com/home/home-equity/" target="_blank" rel="noopener noreferrer">LendingTree – Home Equity Loans</a></li>
+  </ul>
+</section>
+
+<section>
+  <h2>Today's Average Rates</h2>
+  <p><strong>HELOC:</strong> <span id="helocRate" class="rate">Loading...</span></p>
+  <p><strong>Home Equity Loan:</strong> <span id="loanRate" class="rate">Loading...</span></p>
+  <p><strong>10-Year Treasury Yield:</strong> <span id="treasuryYield" class="rate">Loading...</span></p>
+</section>
+
+<section>
+  <h2>Rate Trends</h2>
+  <div id="chartToggle">
+    <button id="btn30" class="active">Last 30 Days</button>
+    <button id="btn12m">Last 12 Months</button>
+  </div>
+  <canvas id="rateChart" aria-label="Rate Trends Chart" role="img"></canvas>
+</section>
+
+<section>
+  <h2>Federal Reserve Rate Tracker</h2>
+  <iframe src="https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html" title="CME FedWatch Tool"></iframe>
+</section>
+
+<section>
+  <h2>Manual Rate Log</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Lender 1</th>
+        <th>Lender 2</th>
+        <th>Lender 3</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>MM/DD/YYYY</td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Helper function for coloring rates
+function colorRate(elementId, rate, thresholds) {
+  const el = document.getElementById(elementId);
+  if (rate === "N/A" || rate === "Error loading") {
+    el.style.color = "black";
+    return;
+  }
+  const num = parseFloat(rate);
+  if (num <= thresholds.green) {
+    el.style.color = "green";
+  } else if (num >= thresholds.red) {
+    el.style.color = "red";
+  } else {
+    el.style.color = "black";
+  }
+}
+
+// Fetch HELOC & Home Equity Loan Rates from Bankrate
+fetch("https://www.bankrate.com/api/loan-rates/home-equity/v1/")
+  .then(res => res.json())
+  .then(data => {
+    const heloc = data.rates.find(r => r.productName.toLowerCase().includes("heloc"));
+    const homeLoan = data.rates.find(r => r.productName.toLowerCase().includes("home equity loan"));
+    const helocRate = heloc ? `${heloc.apr}` : "N/A";
+    const homeLoanRate = homeLoan ? `${homeLoan.apr}` : "N/A";
+
+    document.getElementById("helocRate").textContent = helocRate + "%";
+    document.getElementById("loanRate").textContent = homeLoanRate + "%";
+
+    colorRate("helocRate", helocRate, { green: 7.0, red: 8.51 });
+    colorRate("loanRate", homeLoanRate, { green: 7.5, red: 9.01 });
+  })
+  .catch(() => {
+    document.getElementById("helocRate").textContent = "Error loading";
+    document.getElementById("loanRate").textContent = "Error loading";
+  });
+
+// Fetch 10-Year Treasury Yield from U.S. Treasury
+fetch("https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/avg_interest_rates")
+  .then(res => res.json())
+  .then(data => {
+    const latest = data.data.find(item => item.security_desc === "Marketable" && item.security_type_desc.includes("10-Year"));
+    const treasuryRate = latest ? `${latest.avg_interest_rate_amt}` : "N/A";
+    document.getElementById("treasuryYield").textContent = treasuryRate + "%";
+    colorRate("treasuryYield", treasuryRate, { green: 3.0, red: 4.01 });
+  })
+  .catch(() => {
+    document.getElementById("treasuryYield").textContent = "Error loading";
+  });
+
+// Chart.js setup for Rate Trends
+
+// For demo, mock historical data — replace with real API if available
+// Generate dates and random-ish data for 30 days and 12 months
+function generateMockData(days, baseHeloc, baseLoan) {
+  const dates = [];
+  const helocRates = [];
+  const loanRates = [];
+  let date = new Date();
+  date.setHours(0,0,0,0);
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(date);
+    d.setDate(d.getDate() - i);
+    dates.push(d.toISOString().slice(0,10));
+    helocRates.push((baseHeloc + (Math.random() - 0.5)*0.3).toFixed(2));
+    loanRates.push((baseLoan + (Math.random() - 0.5)*0.3).toFixed(2));
+  }
+  return { dates, helocRates, loanRates };
+}
+
+const data30Days = generateMockData(30, 7.5, 8.3);
+const data12Months = generateMockData(365, 7.5, 8.3);
+
+const ctx = document.getElementById("rateChart").getContext("2d");
+let currentDataset = data30Days;
+
+const chart = new Chart(ctx, {
+  type: "line",
+  data: {
+    labels: currentDataset.dates,
+    datasets: [
+      {
+        label: "HELOC Rate (%)",
+        data: currentDataset.helocRates,
+        borderColor: "#007acc",
+        backgroundColor: "rgba(0, 122, 204, 0.2)",
+        fill: true,
+        tension: 0.25,
+        pointRadius: 2,
+      },
+      {
+        label: "Home Equity Loan Rate (%)",
+        data: currentDataset.loanRates,
+        borderColor: "#28a745",
+        backgroundColor: "rgba(40, 167, 69, 0.2)",
+        fill: true,
+        tension: 0.25,
+        pointRadius: 2,
+      },
+    ],
+  },
+  options: {
+    responsive: true,
+    interaction: {
+      mode: "index",
+      intersect: false,
+    },
+    plugins: {
+      legend: {
+        labels: {
+          font: {
+            size: 14,
+          },
+        },
+      },
+      tooltip: {
+        enabled: true,
+        mode: "nearest",
+        intersect: false,
+      },
+    },
+    scales: {
+      y: {
+        beginAtZero: false,
+        title: {
+          display: true,
+          text: "Interest Rate (%)",
+          font: { size: 14 },
+        },
+      },
+      x: {
+        title: {
+          display: true,
+          text: "Date",
+          font: { size: 14 },
+        },
+        ticks: {
+          maxTicksLimit: 12,
+        },
+      },
+    },
+  },
+});
+
+document.getElementById("btn30").addEventListener("click", () => {
+  chart.data.labels = data30Days.dates;
+  chart.data.datasets[0].data = data30Days.helocRates;
+  chart.data.datasets[1].data = data30Days.loanRates;
+  chart.update();
+  toggleActiveButton("btn30");
+});
+
+document.getElementById("btn12m").addEventListener("click", () => {
+  chart.data.labels = data12Months.dates;
+  chart.data.datasets[0].data = data12Months.helocRates;
+  chart.data.datasets[1].data = data12Months.loanRates;
+  chart.update();
+  toggleActiveButton("btn12m");
+});
+
+function toggleActiveButton(activeId) {
+  document.getElementById("btn30").classList.remove("active");
+  document.getElementById("btn12m").classList.remove("active");
+  document.getElementById(activeId).classList.add("active");
+}
+</script>
+
+</body>
+</html>
